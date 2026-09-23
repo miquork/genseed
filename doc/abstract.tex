@@ -1,0 +1,30 @@
+In high pileup a generated jet and the jet the detector reconstructs from the
+same interaction are not the same object: PUPPI keeps part of the pileup and
+removes part of the interaction's own energy, and any pairing rule between the
+two collections --- a $\Delta R$ cut, a ghost assignment --- leaves a response
+whose width and tails describe the pairing as much as the detector. genseed
+links every generated particle of every interaction to the particle-flow
+candidate(s) that carry its energy (tracks one to one on charge, direction,
+momentum and $z$; calorimeter deposits at the parallax-corrected, bent impact
+point) and uses the links in both directions. The \emph{GenJetSeed} of a
+reconstructed jet is the generated energy of the candidates inside it, each
+particle entering with its partner's PUPPI weight at generated scale, so that
+the response $\ptraw/\ptlink$ is a pure detector response. The
+\emph{RecoJetSeed} of a generated jet is the PUPPI jet clustered from the
+candidates linked to its particles at the interaction's own vertex, so that
+$\ptrs/\ptpure$ is what the detector made of that jet, with no pairing at all.
+On a NeutrinoGun sample with $\langle N_{\mathrm{PU}}\rangle = 45$ the
+GenJetSeed response at $|\eta|<0.5$, 5--6\,GeV has
+$\sigma_{\mathrm{core}}/\mu = 0.27$ against 0.43 for a $\Delta R<0.2$ pairing
+and $P(R>1.5) = 0.028$ against 0.095, with a Gaussian core that holds the
+whole distribution ($f_{\mathrm{core}} = 1.00$; table~\ref{tab:gs_ladder}) and
+a median that stays within 0.03 of the inclusive one in three
+$N_{\mathrm{PU}}$ slices; a RecoJetSeed exists for 93\% of the pure generated
+jets at 5--6\,GeV and $|\eta|<2.5$, against 60\% with a $\Delta R<0.2$
+partner (table~\ref{tab:gs_efficiency}). In the lowptjets v4 study this package grew out of,
+a two-step unfolding through the GenJetSeed closed at the per-cent level where
+a single step sat 10--15\% high; that unfolding is not part of this package.
+The package is self-contained: its own tiled
+anti-kT clusterer, its own per-vertex PUPPI, a TTreeReader input layer, a
+compact tuple of all four jet collections, a histogram file of the key
+metrics, and this document, generated from them.

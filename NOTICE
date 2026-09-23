@@ -1,0 +1,27 @@
+genseed - generated jets seeded by the reconstruction, and reconstructed jets
+seeded by the generator, through particle-level linking of generated particles
+to particle-flow candidates.
+
+Copyright 2026 Mikko Voutilainen
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this software except in compliance with the License. You may obtain a copy of
+the License at http://www.apache.org/licenses/LICENSE-2.0
+
+The jet clustering in tiledjet.h is an independent implementation of the anti-kT
+/ kT / Cambridge-Aachen sequential recombination algorithms with the tiled
+strategy described in M. Cacciari and G. P. Salam, Phys. Lett. B 641 (2006) 57
+[hep-ph/0512210] and M. Cacciari, G. P. Salam and G. Soyez, JHEP 04 (2008) 063
+[arXiv:0802.1189]. It contains no code from the FastJet package. FastJet
+(GPL v2 or later) can be used instead of tiledjet.h as an optional external
+dependency; a build that links FastJet is subject to FastJet's licence.
+
+The pileup-per-particle weights in puppi.h are an independent implementation of
+the PUPPI algorithm, D. Bertolini, P. Harris, M. Low and N. Tran, JHEP 10 (2014)
+059 [arXiv:1407.6013], with the free parameters measured from the weights
+stored in CMS NanoAOD as documented in the header. It contains no CMSSW code.
+
+tdrstyle_mod22.C contains the CMS publication-style macros tdrstyle.C and
+CMS_lumi.h/.C (CMS Collaboration, https://ghm.web.cern.ch/ghm/plots/), merged
+and extended by the author; those parts are not covered by the Apache License
+and remain under their original terms.

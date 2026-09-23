@@ -1,0 +1,343 @@
+\section{The problem}
+\label{s:problem}
+
+An inclusive jet measurement needs a response matrix from generated to
+reconstructed jets, and the matrix needs a pairing. In a bunch crossing with
+45 interactions, PUPPI run for one vertex hypothesis reconstructs the jets of
+that interaction with part of the pileup left in and part of the interaction's
+own soft neutrals floored out. A generated jet paired to the nearest
+reconstructed jet inside $\Delta R < 0.2$ then has a response
+$R = \ptraw/\ptpure$ whose left tail is truncated by the pairing (a badly
+reconstructed jet moves out of the cone) and whose right tail is the pileup
+the seed does not know about. Pairing by ghost association --- clustering the
+generated particles as ghosts with the candidates and reading off which jet
+took them --- makes the pairing complete but does not remove the right tail,
+because the seed still does not know what PUPPI kept.
+
+The observation behind genseed is that the pairing should be made at the
+level where the ambiguity is smallest: between generated particles and
+particle-flow candidates. A track is one particle seen twice; a calorimeter
+cluster is a small, geometrically predictable set of particles. Once every
+generated particle has its PF partner(s), two objects follow with no jet-level
+pairing at all: the generated energy inside a reconstructed jet, weighted the
+way PUPPI weighted its candidates (the GenJetSeed), and the reconstructed
+energy that a generated jet's particles produced, clustered the way the
+reconstruction would cluster it (the RecoJetSeed).
+
+\section{The algorithm}
+\label{s:algorithm}
+
+\subsection{Input}
+Per event: the PF candidates ($\pt$, $\eta$, $\phi$, $m$, pdgId, charge, $dz$
+to the primary vertex, the key \texttt{vertexRef} of the reconstructed vertex
+with its fit-quality flags \texttt{fromPVvertexRef} and
+\texttt{pvAssocQuality}); the
+primary-vertex $z$; the generated particles of every interaction with their
+interaction index and vertex $z$. The reader (\texttt{nanoreader.h}) detects
+the number of interaction slots from the branch list. Neutrinos are dropped;
+particles beyond $|\eta| = $ \texttt{etaMaxPart} $= 5.5$ are dropped.
+
+\subsection{Vertices}
+Only the first four vertex positions are stored in NanoAOD, so the $z$ of every
+reconstructed vertex is recovered from the median of $z_{\mathrm{PV}} + dz$
+over the tracks that carry its key (25\,$\mu$m for the primary vertex, 49 for
+the others; \texttt{puppi::VertexZ}). A vertex with fewer than
+\texttt{minTrkPerVertex} $= 3$ tracks is unusable. A reconstructed vertex
+\emph{owns} the generated interaction nearest to it if that is within
+\texttt{dzVertexGen} $= 0.05$\,cm; an interaction is processed on the generated
+side at the usable vertex nearest to it, if that is within
+\texttt{dzRecoSeed} $= 0.2$\,cm. An interaction without such a vertex has no
+$\Delta R$ partner, topology, mutual-dominance partner or RecoJetSeed, and its
+pure jets are not in the efficiency denominators or the gen-side topology.
+
+\subsection{PUPPI per vertex}
+\texttt{puppi.h} recomputes the PUPPI weights $w_i(v)$ with any vertex $v$
+playing the primary one: $\alpha_i = \log\sum_{j\ne i,\,\Delta R<0.4}
+(\pt^j/\Delta R_{ij})^2$ over the charged candidates of $v$ inside the tracker
+and over all candidates beyond it, $\chi^2_i = (\alpha_i - \mathrm{med})|\alpha_i
+- \mathrm{med}|/\mathrm{rms}^2$, where med is the median of $\alpha$ over the
+charged pileup candidates in the tracker and the 20\% quantile over all
+candidates of each forward region, and rms is $0.7$ times the RMS of those
+$\alpha$ about med taken on the low side only (candidates below 0.1\,GeV set
+neither; \texttt{puppi::Config} \texttt{medQuantileFwd}, \texttt{rmsScale},
+\texttt{leftRMS}, \texttt{rmsPtMin}),
+$w_i = F_{\chi^2,1}(\chi^2_i)$, charged-from-$v$ candidates at 1 and charged
+from elsewhere at 0, and a neutral floor $w\pt < 0.184 + 0.0131\,N_{\mathrm{PV}}$
+($1.85 + 0.070\,N_{\mathrm{PV}}$ beyond $|\eta| = 2.5$). The free parameters were
+read off the weights stored in NanoAOD against the primary vertex
+(\texttt{puppi.h} header); the charged-to-vertex rule is \texttt{vertexRef}
+with the fit flags, or $|z_{\mathrm{track}} - z_v| < 0.03$\,cm. Beyond
+$|\eta| = 2.5$ the algorithm is vertex-blind by construction.
+
+\subsection{The linker}
+\label{s:linker}
+\texttt{genlink.h} runs once per event, independently of the vertex hypothesis.
+
+\paragraph{Geometry.} A PF track's direction is measured at the track, so its
+target is the generated direction. A PF neutral's direction is built from the
+reconstructed primary vertex, while the particle left interaction $j$ at
+$z_j$; seen from $z_{\mathrm{PV}}$ the same crystal is at $\Delta\eta = (z_j -
+z_{\mathrm{PV}})/(r\cosh\eta)$, 0.045 rms in the barrel. Every calorimeter
+target is therefore the crossing point of the particle with the ECAL
+($r = 1.29$\,m, $|\eta| < 1.479$, else $z = 3.17$\,m), HCAL (1.90\,m, 1.30, 3.90\,m)
+or HF ($z = 11.15$\,m) surface, re-referenced to $z_{\mathrm{PV}}$
+(\texttt{parallaxRef} $= 1$). A charged particle bends: $x = 0.2998\,B\,r/2\pt$,
+$\phi_D = \phi - q\,\mathrm{bendSign}\,\arcsin x$, $z_D = z_j + r\sinh\eta\,\arcsin(x)/x$,
+and at $x \ge 1$ it never reaches the surface (a barrel hadron below 0.735\,GeV
+never sees the ECAL, below 1.08\,GeV never the HCAL); in HF the bend accrues
+only to $r = z_{\mathrm{sol}}/|\sinh\eta|$ with $z_{\mathrm{sol}} = 3.4$\,m.
+Both are checked on the data by \texttt{drawGenSeed.C}: the slope of
+$\eta_{\mathrm{PF}} - \eta_{\mathrm{gen}}$ against $(z_j - z_{\mathrm{PV}})/(r\cosh\eta)$
+for single-source photon links must be $+1$, and the slope of $q\,\Delta\phi$
+against $1/\pt$ for untracked-hadron links must be negative, of order
+$-0.7$ to $-1$\,rad\,GeV.
+
+\paragraph{Pass 1, prompt tracks, one to one.} Generated charged particles
+with $c\tau > 1$\,m ($\pi^\pm$, $K^\pm$, p, e, $\mu$) and PF tracks (pdgId 211,
+11, 13) inside $|\eta| \le 3$: same charge sign (\texttt{useCharge}),
+$\Delta R < 0.03$ (0.05 beyond $|\eta| = 1.5$), $|\ln(\pt^{\mathrm{PF}}/\pt^{\mathrm{gen}})| < 0.7$,
+$|z_{\mathrm{track}} - z_j| < \max(0.10\,\mathrm{cm},\, 3\sigma_z)$ with
+$\sigma_z = \sqrt{0.003^2 + (0.02\cosh^{1.5}\eta/\pt)^2}$\,cm (\texttt{useDz};
+0.30\,cm floor for $2.5 < |\eta| < 3$). Pairs are scored by
+$\chi^2 = (\Delta R/0.008)^2 + (\Delta z/\sigma_z)^2 + (\ln\mathrm{ratio}/0.15)^2$,
+sorted, and accepted greedily while both ends are free. A taken track carries
+nothing else.
+
+\paragraph{Pass 2, calorimeter and HF, shared.} Every particle without a pass-1
+link is partitioned over the candidates inside a class-dependent cone at its
+target, kernel $a_i = C\exp(-\Delta R^2/2\sigma^2)$, $f_{gi} = a_i/\sum a$, so
+that a linked particle is fully linked ($\sum_i f_{gi} = 1$). The table
+($\sigma$ / cut / compatibility $C$; $\sigma$ and cut scaled by
+\texttt{kernelScale} and by 1.4 for $1.5 < |\eta| < 3$, the cut then clamped at
+0.4, the cell of the linker's search grid, so that the $V^0$ cone at
+$1.5<|\eta|<3$ ($0.35\times1.4$) and the HF cone at $2.9<|\eta|<3$
+($0.30\times1.4$) are at the clamp already for \texttt{kernelScale} $=1$):
+photon $\to$ PF photon
+at the ECAL 0.025 / 0.06 / 1.0, $\to$ neutral hadron at the HCAL 0.06 / 0.15 / 0.3,
+$\to$ unclaimed track (conversion) 0.05 / 0.10 / 0.3; neutral hadron $\to$ PF
+neutral hadron 0.08 / 0.20 / 1.0, $\to$ photon 0.04 / 0.10 / 0.3; untracked
+charged hadron $\to$ photon at the bent ECAL target 0.04 / 0.10 / 0.5, $\to$
+neutral hadron at the bent HCAL target 0.08 / 0.20 / 1.0, $\to$ unclaimed
+same-sign track within 0.05 and 0.3\,cm (decay in flight) 0.5; $V^0$ ($K_S$,
+$\Lambda$, hyperons) $\to$ unclaimed tracks of either sign, photons, neutral
+hadrons within $\min(0.35,\, 0.05 + 0.45/\pt)$ at 1.0 / 0.7 / 1.0; beyond
+$|\eta| = 2.9$ everything $\to$ HF candidates beyond 2.85 within 0.30, natural
+(hadron $\to$ HF hadron, $\gamma$/e $\to$ HF em) 1.0, crossed 0.5. The
+\emph{tier rule}: if a candidate with $C = 1$ is inside the cone, the $C < 1$
+candidates are dropped. There is no rescue pass: a PF candidate with no
+generated partner is an orphan and is counted (1--2\% of the jet $\pt$ on this
+sample), not attached to the nearest particle at full $\pt$, which would move
+detector response and pileup into the seed by construction.
+
+\paragraph{Output.} For every PF candidate $i$ the routed generated
+four-vector $G_i = \sum_g f_{gi}\, p_g$ (generated $\pt$, generated mass), the
+link lists both ways, and one record per link for the diagnostics.
+
+\subsection{GenJetSeed}
+\label{s:genjetseed}
+For each usable vertex $v$ the PF candidates with $w_i(v) > 0$ are clustered
+(anti-$k_{\mathrm T}$, $R = $ \texttt{R} $= 0.4$, from
+\texttt{ptMinCluster} $= 1$\,GeV) together with ghosts ($\pt \times 10^{-9}$)
+for the \emph{unlinked} particles of the interaction $v$ owns. The seed of jet
+$k$ is
+\[
+  \vec S_k = \sum_{i \in k} w_i(v)\, G_i \;+\; \sum_{\text{unlinked own ghosts } g \in k} p_g ,
+  \qquad \ptlink = |\vec S_{k,\mathrm T}| ,
+\]
+i.e.\ a linked particle is credited to the jet its PF partner ended up in,
+with the partner's PUPPI weight, at generated scale; an unlinked own particle
+is credited to the jet its direction falls in, at weight 1; an unlinked far
+particle to nothing. \texttt{linkz} is the first sum alone. The seed is
+decomposed into own / far (by interaction) / unlinked parts and the
+reconstructed jet into attributed / orphan parts. Because $\pt^{\mathrm{PF}}$
+never enters, $R = \ptraw/\ptlink$ stays a detector response ---
+calorimeter non-linearity, thresholds, tracking inefficiency, the neutral
+floor --- and a correction derived from it transfers to data.
+
+\subsection{RecoJetSeed}
+\label{s:recojetseed}
+For each pure generated jet $J$ of interaction $j$ (anti-$k_{\mathrm T}$
+$R$, clustered per interaction from \texttt{ptMinGen} $= 1$\,GeV) with a
+usable vertex within \texttt{dzRecoSeed} $= 0.2$\,cm, the PF candidates linked
+to its particles are collected with the share
+\[
+  s_{iJ} = \frac{\sum_{g \in J} f_{gi}\, \pt^g}{S_i} \in [0,1] ,
+  \qquad S_i = \sum_g f_{gi}\, \pt^g ,
+\]
+the fraction of candidate $i$'s attributed (scalar) generated $\pt$ that came
+from $J$. The shares of one candidate sum to at most 1 over the pure jets, so
+a candidate shared with another jet or with pileup is never credited twice
+(dividing by the magnitude $G_{i,\mathrm T}$ of the vector sum instead, which is
+smaller for partners in different directions, would do that). Each candidate
+enters as $s_{iJ}\, w_i(v)\, p_i^{\mathrm{PF}}$ with the PUPPI weight at that
+vertex, the set is clustered with anti-$k_{\mathrm T}$ $R$ (no threshold), and the hardest
+jet is the RecoJetSeed: its four-vector, the number of candidates,
+$f_{\mathrm{lead}}$ (its $\pt$ over the scalar sum of the weighted candidates),
+$f_{\mathrm{linked}}$ (the linked fraction of $J$'s generated $\pt$) and
+$f_{\mathrm{PUPPI}}$ ($\sum s w \pt / \sum s \pt$, what PUPPI kept of $J$'s
+candidates). The same candidates clustered at weight $s_{iJ}$ alone give
+$\pt^{\mathrm{rs0}}$, the jet as the detector saw it before PUPPI decided
+anything; the gap between $\pt^{\mathrm{rs0}}$ and $\ptrs$ is what PUPPI took
+away.
+
+$\ptrs/\ptpure$ is what the detector made of \emph{this} generated jet: no
+$\Delta R$, no share threshold, no dedup, no other interaction's particles. It
+is not efficiency-free, though: where PUPPI keeps none of $J$'s candidates
+(most forward jets of a few GeV) $\ptrs = 0$, the jet is not in the response,
+and the response is to be read together with the fraction that has a
+RecoJetSeed (\texttt{eff/hgmat\_rs}); $\pt^{\mathrm{rs0}}/\ptpure$ is filled
+wherever anything of $J$ was linked. Because the RecoJetSeed is built from a
+subset of the jet's own candidates, its response sits below 1 with a flat low
+side: the tail is on the left, and the v4 core fit, whose window assumes a
+right tail, is often undefined for it (section~\ref{s:results}). The
+reconstructed jet then factorises as
+\[
+  \frac{\ptraw}{\ptpure} = \frac{\ptrs}{\ptpure} \times \frac{\ptraw}{\ptrs} ,
+\]
+with $\ptraw$ that of the kept copy of $J$'s mutual-dominance partner
+(section~\ref{s:topology}): the second factor is what pileup and the clustering
+of the whole event add. No correction is applied to $\ptrs$: the reco-jet
+table maps $\ptraw$ to the link scale, which a RecoJetSeed is not on.
+
+\subsection{Topology and the bridge}
+\label{s:topology}
+Reconstructed side, per vertex and seed $k$: the pure jets giving more than
+\texttt{shareFrac} $= 1/3$ of $\ptlink$ are its contributors, $n_{\mathrm{in}}$;
+$p^*$ is the largest; $n_{\mathrm{out}}$ counts the jets receiving more than
+\texttt{shareFrac} of $p^*$. Classes: none ($n_{\mathrm{in}} = 0$),
+$1\leftrightarrow1$ (1, 1), split (1, $\ne 1$), merge ($\ge2$, 1), tangle
+($\ge2$, $\ge2$); they partition the reconstructed jets. Generated side, per
+pure jet $J$ at its vertex: $n_r$ jets receive more than \texttt{shareFrac} of
+$\ptpure$ and $k_{\mathrm{main}}$ is the one receiving most; lost ($n_r = 0$),
+$1\leftrightarrow1$ ($n_r = 1$, $k_{\mathrm{main}}$ has at most one
+contributor), split ($\ge2$, at most one), merge (1, $\ge2$), tangle ($\ge2$,
+$\ge2$); they partition the pure jets whose interaction has a vertex (a jet
+without one keeps \texttt{gj\_topo} $=$ lost in the tuple but is not in
+\texttt{topo/}). A seed $k$ and a pure jet $J$ are \emph{mutually dominant}
+when each gives the other more than \texttt{shareFrac} and each is the
+other's largest: $J$ gave $k$ more than \texttt{shareFrac} of $\ptlink$ and is
+its $p^*$, and $k$ received more than \texttt{shareFrac} of $\ptpure$ and is
+$J$'s $k_{\mathrm{main}}$. It is one relation, \texttt{rj\_bpair} on the
+reconstructed side and the dominance partner on the generated side, so the
+dominance efficiency counts exactly the pure jets that the fake rates and the
+bridge see paired. The bridge from the seed level to the pure level is written
+as a matrix over the mutual pairs with the unpaired seeds (pileup-made) and
+unpaired pure jets (no vertex, lost) as additive vectors. Jets reconstructed
+at several vertex hypotheses ($\Delta R < $ \texttt{dupDR} $= 0.15$, $|\Delta\pt| <$
+\texttt{dupPtFrac} $= 0.10$) are kept once, the copy with the largest own
+fraction.
+
+\subsection{Knobs}
+\label{s:knobs}
+Every value is set in \texttt{runGenSeed.C} through \texttt{SetOpt} and written
+to \texttt{hist/hopts} (value $\times$ jobs; divide by \texttt{hcount[jobs]}).
+
+\begin{center}\small
+\begin{tabular}{llp{8.6cm}}
+\toprule
+knob & default & meaning \\
+\midrule
+\texttt{R} & 0.4 & jet radius, all four collections \\
+\texttt{ptMinCluster} & 1 GeV & reconstructed jets clustered from this (PUPPI-weighted raw $\pt$) \\
+\texttt{ptMinGen} & 1 GeV & pure generated jets clustered from this \\
+\texttt{ptStoreReco}, \texttt{ptStoreGen} & 3, 3 GeV & tuple storage thresholds; a partner below is index $-1$ \\
+\texttt{etaMaxPart} & 5.5 & generated particles kept \\
+\texttt{shareFrac} & 1/3 & the topology and mutual-dominance share \\
+\texttt{dzVertexGen} & 0.05 cm & a vertex owns the nearest interaction within this \\
+\texttt{dzRecoSeed} & 0.2 cm & an interaction is processed on the generated side ($\Delta R$ partner, topology, mutual dominance, efficiency denominators, RecoJetSeed) at its nearest usable vertex only if that is within this \\
+\texttt{minTrkPerVertex} & 3 & vertices with fewer tracks are unusable \\
+\texttt{dupDR}, \texttt{dupPtFrac} & 0.15, 0.10 & duplicate removal across vertex hypotheses \\
+\texttt{kernelScale} & 1.0 & scales every pass-2 $\sigma$ and cone (stability test); the cones are clamped at 0.4, the linker grid cell, so the widest do not grow \\
+\texttt{useDz}, \texttt{useCharge} & 1, 1 & pass-1 $\Delta z$ cut and charge-sign requirement \\
+\texttt{parallaxRef} & 1 & calorimeter directions seen from $z_{\mathrm{PV}}$ (0: from the origin) \\
+\texttt{bendSign} & $+1$ & sign of the charged bend, checked by \texttt{link/hbend} \\
+\texttt{jecFile} & `` '' & correction table from pass 1 (\texttt{jec.h}), applied to the reconstructed jets only; empty in pass 1; the name is kept in \texttt{hist/jecFile} \\
+\texttt{firstEntry}, \texttt{lastEntry} & job range & even-aligned so both halves land in every job \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{The clustering backend}
+\label{s:backend}
+\texttt{tiledjet.h} is an independent implementation of the sequential
+recombination algorithms (anti-$k_{\mathrm T}$, $k_{\mathrm T}$,
+Cambridge--Aachen through the exponent $p$) with the tiled strategy of
+Cacciari and Salam: tiles of size $\ge R$ in rapidity and azimuth, nearest
+neighbours searched in the $3\times3$ block around a particle, a min-heap over
+the candidate distances, and after each merge a full rescan only for the
+particles whose nearest neighbour was one of the merged pair. It contains no
+FastJet code. \texttt{bench\_tiledjet.C} checks it against a plain $N^2$
+reference and against FastJet for exactness and speed; the verdict is compiled
+into \texttt{tiledjet::kAtLeastAsFastAsFastJet} and the driver uses FastJet
+only when it is found and the verdict is false. \input{benchmark}
+
+\section{The tuple}
+\label{s:tuple}
+One entry per event, \texttt{std::vector} branches, all four collections above
+their storage thresholds, indices referring to the arrays of the same event.
+
+\begin{center}\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{5.6cm}>{\raggedright\arraybackslash}p{10.1cm}}
+\toprule
+branch & content \\
+\midrule
+\texttt{run}, \texttt{lumi}, \texttt{event}, \texttt{nPU}, \texttt{nVtxUsable}, \texttt{pvz}, \texttt{lumiWeight} &
+  event; \texttt{lumiWeight} is the luminosity the event stands for, $N_{\mathrm{PU}}/\sigma_{\mathrm{inel}}$ in
+  pb$^{-1}$ with $\sigma_{\mathrm{inel}} = 80$\,mb \\
+\texttt{vtx\_z}, \texttt{vtx\_ntrk}, \texttt{vtx\_gen} & usable vertices: $z$, tracks, owned interaction or $-1$ \\
+\texttt{gj\_pt}, \texttt{gj\_eta}, \texttt{gj\_phi}, \texttt{gj\_mass}, \texttt{gj\_inter}, \texttt{gj\_ncon},
+\texttt{gj\_vtx} & pure generated jets: interaction, constituents, and the vertex the jet was processed at, or
+  $-1$ (none within \texttt{dzRecoSeed}) \\
+\texttt{gj\_dr02reco}, \texttt{gj\_topo}, \texttt{gj\_kmain}, \texttt{gj\_share} & $\Delta R<0.2$ partner (index
+  into \texttt{rj}), gen-side topology, main receiving jet and the $\pt$ given to it \\
+\texttt{gj\_rs\_pt}, \texttt{gj\_rs\_eta}, \texttt{gj\_rs\_phi}, \texttt{gj\_rs\_mass}, \texttt{gj\_rs\_npf},
+\texttt{gj\_rs\_flead}, \texttt{gj\_rs\_flinked}, \texttt{gj\_rs\_fpuppi} & the RecoJetSeed, in three states:
+  all $-1$ if the jet's interaction has no usable vertex within \texttt{dzRecoSeed}; $\pt = 0$ if there is one
+  but no linked candidate, or none that PUPPI kept (the direction, mass, \texttt{npf} and \texttt{flead} are then 0
+  and mean nothing; \texttt{flinked}, \texttt{fpuppi} and \texttt{gj\_rs0\_pt} are valid); $\pt > 0$ for a
+  RecoJetSeed. ``Has one'' is $\pt > 0$, as in \texttt{eff/hgmat\_rs} \\
+\texttt{gj\_rs0\_pt} & the RecoJetSeed before PUPPI (the same candidates at weight $s_{iJ}$ alone): $-1$ without
+  a vertex, 0 if nothing of the jet was linked \\
+\texttt{rj\_pt}, \texttt{rj\_ptcorr}, \texttt{rj\_eta}, \texttt{rj\_phi}, \texttt{rj\_mass}, \texttt{rj\_vtx},
+\texttt{rj\_gen} & kept reconstructed jets (PUPPI-weighted raw and corrected $\pt$; equal in pass 1), vertex,
+  owned interaction \\
+\texttt{rj\_seed\_link}, \texttt{rj\_seed\_linkz} & the GenJetSeeds \\
+\texttt{rj\_fown}, \texttt{rj\_ffar}, \texttt{rj\_funl}, \texttt{rj\_forph} & seed decomposition and the orphan
+  fraction of the reconstructed $\pt$ \\
+\texttt{rj\_topo}, \texttt{rj\_pstar}, \texttt{rj\_pshare}, \texttt{rj\_bpair}, \texttt{rj\_ncopies} &
+  reco-side topology, dominant pure jet (index into \texttt{gj}) and the $\pt$ it gave, mutual dominance, and
+  the number of vertex hypotheses that produced the jet (1 = unique) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{The histogram file}
+\label{s:histos}
+Directory \texttt{hist} holds the counters and the knobs, and next to them,
+as text, what is not a number: the version of \texttt{puppi.h} the weights
+were made with (\texttt{puppiVersion}) and the correction table, or
+\texttt{none} in pass 1 (\texttt{jecFile}); \texttt{spec} the spectra
+of the four collections per $|y|$ bin and half; \texttt{eff} the pairing
+efficiencies ($\Delta R<0.2$, mutual dominance, link topology, RecoJetSeed
+present); \texttt{fake} the reconstructed jets with no pure feeder and without
+a mutual partner; \texttt{resp} the response distributions as
+$(\pt^{\mathrm{def}}, R)$ histograms for $\ptraw/\ptlink$
+(\texttt{hresp\_link}), $\ptraw/\pt^{\mathrm{linkz}}$ (\texttt{hresp\_linkz}),
+$\ptraw/\ptpure$ ($\Delta R$ pairs, \texttt{hresp\_dr}), $\ptrs/\ptpure$
+(\texttt{hresp\_rs}, for $\ptrs>0$), $\pt^{\mathrm{rs0}}/\ptpure$
+(\texttt{hresp\_rs0}, the RecoJetSeed without PUPPI weights, for
+$\pt^{\mathrm{rs0}}>0$) and $\ptraw/\ptrs$ against $\ptpure$
+(\texttt{hresp\_reco\_rs}, the kept copy of the mutual-dominance partner over
+the RecoJetSeed: the pileup and clustering factor of
+$\mathrm{reco}/\mathrm{pure} = \mathrm{rs}/\mathrm{pure}\times\mathrm{reco}/\mathrm{rs}$),
+the link response by reconstructed topology and by $N_{\mathrm{PU}}$ slice,
+with the seed-fraction profiles (files written before these two were added have
+\texttt{hresp\_rs\_corr}, the RecoJetSeed times the reco-jet JEC, which is
+not a closure and is no longer made); \texttt{topo} the topology counts both sides;
+\texttt{bridge} the seed-to-pure matrix and its vectors; \texttt{map} the
+$\eta$--$\phi$ maps (jet densities, response profiles, orphan and linked
+fractions, far fraction); \texttt{link} the linker diagnostics. The
+$\pt$ axis is the standard CMS inclusive-jet binning extended down to 2\,GeV
+(edges 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 21, 24, 28, \ldots, 790); $|\eta|$ and
+$|y|$ bins are 0.5 wide to 5.0; the response axis is 0--5 in 500 bins.
+Halves a and b are the even and odd entries, for closure tests.

@@ -1,0 +1,56 @@
+\section{How to run}
+\label{s:howto}
+
+\begin{lstlisting}
+# input: a file list, one NanoAOD path per line (see Sec. algorithm: input branches)
+./run.sh p1 8                  # pass 1, all events, no correction, 8 jobs -> rootfiles/GenSeed_p1.root
+root -l -b -q 'drawGenSeed.C+("rootfiles/GenSeed_p1.root","_v1")'   # -> text/jec_v1.txt, plots/, doc/{plots,tables}.tex
+./run.sh p2 8                  # pass 2 with text/jec_v1.txt -> rootfiles/GenSeed_v1.root
+root -l -b -q 'drawGenSeed.C+("rootfiles/GenSeed_v1.root","_v1")'
+cd doc && pdflatex genseed && pdflatex genseed
+\end{lstlisting}
+
+\noindent A single job on a range of entries, or a test:
+\begin{lstlisting}
+root -l -b -q 'runGenSeed.C("files.txt","_test",0,1,200)'          # 200 events
+root -l -b -q 'runGenSeed.C("files.txt","_v1",3,8,0,"text/jec_v1.txt")'   # job 3 of 8
+\end{lstlisting}
+
+\noindent The clustering backend is chosen at build time in \texttt{runGenSeed.C}:
+\texttt{tiledjet.h} unless FastJet is found \emph{and} the benchmark constant
+\texttt{tiledjet::kAtLeastAsFastAsFastJet} is false. \texttt{bench\_tiledjet.C}
+reproduces the benchmark on any machine. Every knob is a \texttt{SetOpt} call
+in the driver and every value used is written to \texttt{hist/hopts}, with the
+PUPPI version and the correction table as text next to it
+(\texttt{hist/puppiVersion}, \texttt{hist/jecFile}), so a histogram file
+always says how it was made.
+
+\noindent What is in the repository. The input sample is not public, so the
+outputs a reader needs are committed with the code: \texttt{plots/*.pdf},
+the generated \texttt{doc/plots.tex} and \texttt{doc/tables.tex}, the
+compiled \texttt{doc/genseed.pdf}, and the correction table
+\texttt{text/jec\_v1.txt} that pass 2 reads. Anyone can read the document, or
+rebuild it with \texttt{cd doc \&\& pdflatex genseed}, without the sample.
+The histogram and tuple files (\texttt{rootfiles/}), everything else in
+\texttt{text/}, the ACLiC build products and the \LaTeX{} auxiliary files are
+not committed. After a new production, rerun \texttt{drawGenSeed.C} and
+\texttt{pdflatex} and commit the plots, the two generated \texttt{.tex} files
+and the PDF together, so that they never describe different files.
+
+\section{Towards JMENANO}
+\label{s:jmenano}
+
+The algorithm needs, per event: the PF candidates with $\pt$, $\eta$, $\phi$,
+mass, pdgId, charge, $dz$ to the primary vertex, the vertex key of each charged
+candidate (\texttt{vertexRef}) with the fit-quality flags, and the generated
+particles of \emph{every} pileup interaction with their interaction $z$. The
+first set is what \texttt{PFCandV2} in the custom NanoAOD used here carries
+and what JMENANO's PF candidate table carries or can be extended to carry
+(\texttt{vertexRef} and \texttt{dz} are the essential additions). The second
+set is only available in a production that keeps the pileup generator record,
+as this sample does; for a standard production with the signal generated
+separately from the pileup, the linker runs on the signal's generated particles
+alone, the GenJetSeed is defined as here with everything unlinked counted as
+pileup, and the RecoJetSeed is defined for the signal jets. Nothing in
+\texttt{genlink.h} or \texttt{GenSeed.C} depends on the pileup record beyond
+the ownership of a vertex, which then reduces to the signal vertex.

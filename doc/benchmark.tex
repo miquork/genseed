@@ -1,0 +1,42 @@
+%% benchmark.tex - written by hand from the bench_tiledjet.C run recorded in
+%% tiledjet::kBenchmark (tiledjet.h); rerun the macro and update both together.
+Table~\ref{tab:bench} is the result of
+\texttt{root -l -b -q 'bench\_tiledjet.C(200,"NANOAODSIM\_1.root")'} on
+2026-09-23: 200 events of the sample, anti-$k_{\mathrm T}$ $R=0.4$, E-scheme,
+jets above 1\,GeV compared, on an Apple M2 (4 performance + 4 efficiency
+cores, macOS 13.5, Apple clang 15, ACLiC \texttt{-O3}) against FastJet 3.5.1
+with its \texttt{Best} strategy. The four inputs span the multiplicities the
+analyzer meets: the PUPPI-weighted candidates of one vertex hypothesis, all PF
+candidates unweighted, the same jittered by $10^{-7}$, and all candidates plus
+the gen ghosts of every interaction. tiledjet is 13--29\% faster on every
+input, which is why it is the default. It is identical to the $N^2$ reference
+on every jet of every input (four-vectors bitwise, constituent lists in order),
+and identical to FastJet on every jet of the PUPPI, jittered and ghost inputs;
+on the unweighted PF input 505 jets in 27 of 200 events differ from FastJet
+(and, identically, the $N^2$ reference does) because HF towers and ECAL
+crystals at exactly equal float $\eta$ or $\phi$ give exactly tied distances,
+and which tied pair merges first is a convention. A $10^{-7}$ jitter removes
+every difference. A sanitizer fuzz against the $N^2$ reference (6600 random
+events, $N \le 3000$, $0.2 \le R \le 6.2$, $p = -1, 0, 1$, duplicates, zero
+$\pt$, $10^{-9}$ ghosts, particles within a few ulps of tile boundaries) finds
+no difference.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{bench\_tiledjet.C}: mean $\pm$ rms time per event of the
+clustering alone, 200 events, one repetition; the machine was not otherwise
+idle (load $\approx 4$--5), which costs both backends $\sim$5\% against an
+earlier idle run with the same ratios within 0.02.}
+\label{tab:bench}
+\small
+\begin{tabular}{lrrrrrl}
+\toprule
+input & $\langle N\rangle$ & tiledjet [ms] & FastJet [ms] & $N^2$ [ms] & tiled/FJ & FastJet strategy \\
+\midrule
+PF $\times$ PUPPI ($w>0$)  &   123 & $0.061\pm0.024$ & $0.070\pm0.034$ &  0.14 & 0.87 & N2Tiled \\
+PF all, unweighted         &  2094 & $1.20\pm0.30$   & $1.61\pm0.39$   & 12.9  & 0.74 & N2MinHeapTiled \\
+PF all, jittered $10^{-7}$ &  2094 & $1.18\pm0.27$   & $1.60\pm0.38$   & 12.9  & 0.74 & N2MinHeapTiled \\
+PF all + gen ghosts        & 10149 & $6.54\pm2.19$   & $9.25\pm3.22$   & 340   & 0.71 & N2MHTLazy9 \\
+\bottomrule
+\end{tabular}
+\end{table}
