@@ -114,7 +114,9 @@ What the RecoJetSeed shows: at 5–6 GeV in the barrel the detector plus PUPPI
 keep a median 59% of a generated jet's pT (70% without the PUPPI weights), and
 the reconstructed partner carries 26% more than its RecoJetSeed (reco/rs 1.26),
 the pileup that PUPPI kept and clustering confusion; reco/pure is the product.
-The RecoJetSeed loss is PUPPI, not the linker: 59% of the linked neutral pT
+Of the 41% lost, 30 points are the detector (generated particles below the
+calorimeter thresholds, which have no PF partner, and the calorimeter response:
+rs0/pure is already 0.70) and 11 points are PUPPI: 59% of the linked neutral pT
 and 10% of the linked charged pT get weight 0 at the jet's own vertex (the
 neutral floor, 0.18 + 0.013 N_PV GeV, and the 0.03 cm track–vertex
 association). The response is filled for jets that have a RecoJetSeed and is
@@ -131,6 +133,14 @@ read together with that efficiency.
   of the jet's own candidates, so R ≲ 1); the v4 core-fit protocol, which
   expects a right tail, often does not converge for it, and the quantile widths
   are the measure to use.
+* Vertex ownership is by z proximity (the interaction nearest to a reco vertex
+  within 0.05 cm owns it). When two interactions sit within 0.2 cm, the vertex
+  can go to the neighbour rather than to the interaction whose jet made it:
+  for 3.5% of the pure GenJets above 10 GeV, the vertex they are processed at
+  is owned by another interaction. The seed itself is unaffected, but that
+  jet's energy is booked as "far" and the own unlinked ghosts come from the
+  wrong interaction. Ownership by the linked track pT² of each vertex (the
+  PV definition) would fix it.
 * The linker needs the generated particles of every pileup interaction. For a
   standard production with the signal generated separately, it runs on the
   signal's particles alone and everything unlinked counts as pileup (see
