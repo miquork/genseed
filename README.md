@@ -122,6 +122,43 @@ neutral floor, 0.18 + 0.013 N_PV GeV, and the 0.03 cm track–vertex
 association). The response is filled for jets that have a RecoJetSeed and is
 read together with that efficiency.
 
+## Forward jets, missing pT and dijets from every vertex (JVA)
+
+**Note:** [`doc/jva.pdf`](doc/jva.pdf). PUPPI is vertex-blind beyond |η| = 2.5,
+so a per-vertex reconstruction carries the same forward jets at every vertex:
+50 times the vertex's own generated jets at 2.5 < |η| < 3.0 above 10 GeV, mostly
+made of several interactions, and 15 GeV of missing pT per component. The JVA
+study assigns the forward energy to vertices by a global minimisation of the
+summed missing-pT χ² over all vertices (`jvassoc.h`, exact and deterministic),
+and tests it against the generator truth of every interaction.
+
+* The association by missing-pT (or missing-HT, jets above 3–15 GeV) balance
+  **does not work** for 5–20 GeV forward jets at ⟨N_PU⟩ = 45: the forward pT that
+  belongs to one interaction is 1.6 GeV per vertex against 7 GeV of recoil
+  noise; the best configuration places 1.4% more single-interaction clusters
+  right than wrong. Missing-pT width is not a valid figure of merit for it (it
+  is what the method minimises).
+* **PUPPI with its charged-vertex association and α extended to |η| < 3.0**
+  (the charged candidates that exist there) cuts the 2.5–3.0 spike by a factor
+  25–80 at every vertex (reco/gen above 10 GeV 49.6 → 2.0) and the PV missing pT
+  from 17.0 to 15.1 GeV (`JVAOPT="etaFwd=3,pupEtaTracker=3,pupEtaVtxAssoc=3"`,
+  `cmpPuppiFwd.C`).
+* **Dijets from every vertex:** 0.62 balanced (α < 0.3) dijets per crossing
+  against 0.0047 at the PV alone; the bisector dijet width reproduces the true
+  JER in the barrel from pT_avg = 5 GeV. L3Res needs Z+jet events.
+
+```
+LIST=<NANOAODSIM_1.root> ./runjva.sh v2 8                  # ~2 min; knobs via env, any knob via JVAOPT="k=v,..."
+root -l -b -q 'drawJVA.C+("rootfiles/JVA_v2.root","_v2")'  # plots/jva_*, doc/jva_{plots,tables}.tex
+root -l -b -q 'scanJVA.C+("rootfiles/JVA_v2.root")'        # offline re-optimisation from the tuple
+```
+
+| file | what |
+|---|---|
+| [`jvassoc.h`](jvassoc.h) | the optimiser and the forward-cluster builder (ROOT-free; `jva.h` would collide with `JVA.h` on a case-insensitive disk) |
+| [`JVA.h`](JVA.h), [`JVA.C`](JVA.C), [`runJVA.C`](runJVA.C), [`runjva.sh`](runjva.sh) | analyzer: seven methods (dup, lv, trk, jva, ojet, opart, none), missing pT, forward spike, assignment outcomes, dijets (DB, MPF, bisector JER), tuple |
+| [`drawJVA.C`](drawJVA.C), [`scanJVA.C`](scanJVA.C), [`cmpPuppiFwd.C`](cmpPuppiFwd.C) | plots and tables; the offline scan; the PUPPI forward comparison |
+
 ## Known limitations
 
 * **Forward (|η| > 3).** Per-vertex PUPPI has no vertex handle without tracks,
